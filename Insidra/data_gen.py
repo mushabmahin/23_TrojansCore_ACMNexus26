@@ -8,6 +8,11 @@ users = [
     {"id": "U3", "type": "normal"},
     {"id": "U4", "type": "night"},
     {"id": "U5", "type": "insider"},
+    {"id": "U6", "type": "normal"},
+    {"id": "U7", "type": "normal"},
+    {"id": "U8", "type": "night"},
+    {"id": "U9", "type": "insider"},
+    {"id": "U10", "type": "insider"},
 ]
 
 start_date = datetime(2024, 1, 1)

@@ -128,3 +128,19 @@
 
 ### Issues Faced
 - None
+
+## 00:52
+
+### Features Added
+- Fixed bug where `stream_generator.py` unconditionally assigned all events to U5 after step 20
+- Expanded the simulated ecosystem from 5 to 10 users, adding U6, U7, U8, U9, and U10
+- Introduced two new malicious actors (U9 and U10) to the risk evolution simulations alongside U5
+- Regenerated synthetic `logs.csv`
+
+### Files Modified
+- Insidra/data_gen.py
+- Insidra/stream_generator.py
+- Insidra/data/logs.csv
+
+### Issues Faced
+- None

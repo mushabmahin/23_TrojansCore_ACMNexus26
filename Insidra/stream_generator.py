@@ -1,7 +1,7 @@
 import random
 from datetime import datetime
 
-USERS = ["U1", "U2", "U3", "U4", "U5"]
+USERS = ["U1", "U2", "U3", "U4", "U5", "U6", "U7", "U8", "U9", "U10"]
 
 def generate_log(step=0):
     now = datetime.now()
@@ -9,10 +9,8 @@ def generate_log(step=0):
     # Default normal behavior
     user = random.choice(USERS)
 
-    # Gradual insider evolution (U5 becomes malicious over time)
-    if step > 20:
-        user = "U5"
-
+    # Gradual insider evolution for suspicious users
+    if user in ["U5", "U9", "U10"] and step > 20:
         if step < 50:
             files = random.randint(30, 60)
             sensitivity = random.choice(["low", "medium"])
