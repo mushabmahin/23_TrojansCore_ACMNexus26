@@ -1,189 +1,179 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import subprocess
-import ast
 import time
 
-st.set_page_config(
-    layout="wide",
-    page_title="Insidra Dashboard",
-    page_icon="🛡️",
-    initial_sidebar_state="expanded"
-)
+from stream_generator import generate_log
 
-# -------------------------
-# STYLING
-# -------------------------
-st.markdown("""
-<style>
-.stApp {
-    background-color: #0f1115;
-    color: #e0e0e0;
-}
-.metric-card {
-    background-color: #1e2128;
-    padding: 20px;
-    border-radius: 10px;
-    border-left: 5px solid #00f2fe;
-}
-.metric-card.high-alert {
-    border-left: 5px solid #ff4b4b;
-}
-.metric-card.medium-alert {
-    border-left: 5px solid #faca2b;
-}
-</style>
-""", unsafe_allow_html=True)
+from model.preprocess import preprocess_data
+from model.anomaly_model import train_model, predict
+from model.risk_engine import *
 
-# -------------------------
-# LOAD DATA
-# -------------------------
-@st.cache_data
-def load_data():
-    try:
-        df = pd.read_csv("data/scored_logs.csv")
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        df["reasons"] = df["reasons"].apply(
-            lambda x: ast.literal_eval(x) if isinstance(x, str) and x.startswith("[") else x
-        )
-        return df
-    except:
-        return pd.DataFrame()
+st.set_page_config(layout="wide", page_title="Live Threat Monitor")
 
-df = load_data()
+st.title("🛡️ Real-Time Insider Threat Detection System")
 
-# -------------------------
-# SIDEBAR CONTROLS
-# -------------------------
-st.sidebar.title("🛡️ Insidra Controls")
+start = st.sidebar.button("▶ Start Monitoring")
 
-mode = st.sidebar.selectbox(
-    "Scenario Mode",
-    ["Normal Monitoring", "Insider Attack Simulation"]
-)
+st.sidebar.info("Simulating real-time log ingestion with adaptive behavior")
 
-if df.empty:
-    st.warning("No data found. Run pipeline first.")
-    if st.sidebar.button("Run Pipeline"):
-        subprocess.run(["python", "data_gen.py"])
-        subprocess.run(["python", "app.py"])
-        st.rerun()
-    st.stop()
+if start:
 
-# Sort users by risk (SMART)
-user_list = df.groupby("emp_id")["risk_score"].max() \
-              .sort_values(ascending=False) \
-              .index.tolist()
+    logs = []
+    placeholder = st.empty()
 
-selected_user = st.sidebar.selectbox("Employee ID", user_list)
+    st.success("🟢 Monitoring Active")
 
-if st.sidebar.button("🔄 Regenerate Data"):
-    subprocess.run(["python", "data_gen.py"])
-    subprocess.run(["python", "app.py"])
-    st.cache_data.clear()
-    st.rerun()
+    # -------------------------
+    # INITIAL TRAINING BUFFER
+    # -------------------------
+    for i in range(20):
+        logs.append(generate_log(step=i))
 
-# -------------------------
-# USER DATA
-# -------------------------
-full_user_data = df[df["emp_id"] == selected_user].sort_values("timestamp")
+    df_init = pd.DataFrame(logs)
+    X_scaled, df_init = preprocess_data(df_init)
+    model = train_model(X_scaled)
 
-# Simulated real-time behavior
-if mode == "Insider Attack Simulation":
-    step = st.sidebar.slider("Simulation Step", 5, len(full_user_data), 10)
-    user_data = full_user_data.iloc[:step]
-else:
-    user_data = full_user_data
+    # -------------------------
+    # STREAM LOOP (5 EVENTS)
+    # -------------------------
+    for i in range(200):
 
-# -------------------------
-# METRICS
-# -------------------------
-max_risk = user_data["risk_score"].max()
-current_alert = user_data.iloc[-1]["alert"]
+        batch_size = 5
 
-st.title(f"🛡️ User Analysis: `{selected_user}`")
+        new_batch = []
+        for _ in range(batch_size):
+            new_batch.append(generate_log(step=i))
 
-col1, col2, col3 = st.columns(3)
+        logs.extend(new_batch)
 
-alert_class = "high-alert" if max_risk >= 70 else ("medium-alert" if max_risk >= 40 else "")
+        df = pd.DataFrame(logs)
 
-with col1:
-    st.markdown(f'<div class="metric-card {alert_class}"><h4>Max Risk</h4><h2>{max_risk}</h2></div>', unsafe_allow_html=True)
+        # -------------------------
+        # PIPELINE
+        # -------------------------
+        X_scaled, df = preprocess_data(df)
 
-with col2:
-    st.markdown(f'<div class="metric-card {alert_class}"><h4>Status</h4><h2>{current_alert}</h2></div>', unsafe_allow_html=True)
+        scores, labels = predict(model, X_scaled)
 
-with col3:
-    st.markdown(f'<div class="metric-card"><h4>Events</h4><h2>{len(user_data)}</h2></div>', unsafe_allow_html=True)
+        df["anomaly_score"] = scores
+        df["anomaly"] = labels
 
-# -------------------------
-# ALERT SYSTEM
-# -------------------------
-if max_risk >= 70:
-    st.error("🚨 HIGH RISK USER DETECTED!")
-elif max_risk >= 40:
-    st.warning("⚠️ Suspicious behavior detected")
+        baseline = compute_baseline(df)
+        df = merge_baseline(df, baseline)
 
-# -------------------------
-# RISK GRAPH
-# -------------------------
-st.markdown("### 📈 Risk Evolution")
+        df = compute_drift(df)
+        df = add_flags(df)
 
-fig = px.line(
-    user_data,
-    x="timestamp",
-    y="risk_score",
-    markers=True,
-    line_shape="spline"
-)
+        df = compute_risk(df)
+        df = assign_alert(df)
 
-fig.add_hrect(y0=70, y1=100, fillcolor="red", opacity=0.1)
-fig.add_hrect(y0=40, y1=70, fillcolor="yellow", opacity=0.1)
+        df["reasons"] = df.apply(generate_reason, axis=1)
 
-fig.update_layout(
-    plot_bgcolor='rgba(0,0,0,0)',
-    paper_bgcolor='rgba(0,0,0,0)',
-    font=dict(color='#e0e0e0')
-)
+        # -------------------------
+        # SUSPICIOUS LOGS
+        # -------------------------
+        suspicious_df = df[df["risk_score"] >= 40]
 
-st.plotly_chart(fig, use_container_width=True)
+        # -------------------------
+        # LIVE UI
+        # -------------------------
+        with placeholder.container():
 
-# -------------------------
-# DRIFT GRAPH (YOUR USP)
-# -------------------------
-if "file_drift" in user_data.columns:
-    st.markdown("### 📊 Behavioral Drift")
+            st.subheader("📊 System Metrics")
 
-    drift_fig = px.line(
-        user_data,
-        x="timestamp",
-        y="file_drift",
-        markers=True
-    )
+            col1, col2, col3 = st.columns(3)
 
-    drift_fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='#e0e0e0')
-    )
+            latest = df.iloc[-1]
 
-    st.plotly_chart(drift_fig, use_container_width=True)
+            col1.metric("Events Processed", len(df))
+            col2.metric("Latest Risk Score", latest["risk_score"])
+            col3.metric("Current User", latest["emp_id"])
 
-# -------------------------
-# SUSPICIOUS LOGS
-# -------------------------
-st.markdown("### 🚨 Suspicious Activity Log")
+            # ALERT SYSTEM
+            if latest["risk_score"] >= 80:
+                st.error("🚨 LIVE THREAT DETECTED")
+            elif latest["risk_score"] >= 40:
+                st.warning("⚠️ Suspicious Behavior")
 
-suspicious = user_data[user_data["risk_score"] >= 40][[
-    "timestamp", "risk_score", "alert", "reasons"
-]].sort_values("timestamp", ascending=False)
+            # -------------------------
+            # RISK GRAPH
+            # -------------------------
+            st.markdown("### 📈 Risk Evolution")
 
-suspicious["reasons"] = suspicious["reasons"].apply(
-    lambda x: ", ".join(x) if isinstance(x, list) else x
-)
+            fig = px.line(
+                df,
+                x="timestamp",
+                y="risk_score",
+                color="emp_id",
+                markers=True
+            )
 
-if suspicious.empty:
-    st.success("No suspicious activity detected.")
-else:
-    st.dataframe(suspicious, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
+
+            # -------------------------
+            # DRIFT GRAPH
+            # -------------------------
+            if "file_drift" in df.columns:
+                st.markdown("### 📊 Behavioral Drift")
+
+                drift_fig = px.line(
+                    df,
+                    x="timestamp",
+                    y="file_drift",
+                    color="emp_id"
+                )
+
+                st.plotly_chart(drift_fig, use_container_width=True)
+
+            # -------------------------
+            # SUSPICIOUS LOG TABLE
+            # -------------------------
+            st.markdown("### 🚨 Suspicious Activity Logs")
+
+            if not suspicious_df.empty:
+                display_df = suspicious_df.tail(10)[
+                    ["timestamp", "emp_id", "risk_score", "alert", "reasons"]
+                ]
+
+                display_df["reasons"] = display_df["reasons"].apply(
+                    lambda x: ", ".join(x) if isinstance(x, list) else x
+                )
+
+                st.dataframe(display_df, use_container_width=True)
+            else:
+                st.success("No suspicious activity detected")
+
+        time.sleep(0.8)
+
+    # -------------------------
+    # FINAL REPORT
+    # -------------------------
+    st.markdown("## 📄 Simulation Summary Report")
+
+    total_events = len(df)
+    high_risk = len(df[df["risk_score"] >= 70])
+    medium_risk = len(df[(df["risk_score"] >= 40) & (df["risk_score"] < 70)])
+    low_risk = len(df[df["risk_score"] < 40])
+
+    top_user = df.groupby("emp_id")["risk_score"].max().idxmax()
+    max_risk = df["risk_score"].max()
+
+    st.write(f"Total Events Processed: {total_events}")
+    st.write(f"High Risk Events: {high_risk}")
+    st.write(f"Medium Risk Events: {medium_risk}")
+    st.write(f"Low Risk Events: {low_risk}")
+    st.write(f"Most Suspicious User: {top_user}")
+    st.write(f"Maximum Risk Score Observed: {max_risk}")
+
+    # -------------------------
+    # ATTACK STORY
+    # -------------------------
+    st.markdown("### 🧠 Attack Analysis")
+
+    st.write("""
+    Phase 1: Normal behavior  
+    Phase 2: Gradual increase in file access  
+    Phase 3: Abnormal login patterns  
+    Phase 4: Insider threat escalation detected  
+    """)
