@@ -167,6 +167,31 @@ if start:
     st.write(f"Maximum Risk Score Observed: {max_risk}")
 
     # -------------------------
+    # REMEDIATION ACTIONS
+    # -------------------------
+    st.markdown("## 🔐 Automated Remediation Actions")
+    st.write("Take immediate action on users exhibiting highly critical behavior.")
+    
+    critical_users = df[df["risk_score"] >= 70]["emp_id"].unique()
+    
+    if len(critical_users) > 0:
+        for u in critical_users:
+            with st.expander(f"🚨 Action Panel: {u} (CRITICAL RISK)", expanded=True):
+                st.warning(f"User {u} has exceeded risk thresholds. Select an automated response:")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                if col1.button(f"Suspend Account", key=f"susp_{u}"):
+                    st.success(f"✅ Active Directory: User '{u}' has been suspended.")
+                if col2.button(f"Force MFA", key=f"mfa_{u}"):
+                    st.success(f"📱 Okta: Forced Re-Authentication for '{u}'.")
+                if col3.button(f"Isolate Device", key=f"iso_{u}"):
+                    st.success(f"🛡️ CrowdStrike: Device isolation initiated for '{u}'.")
+                if col4.button(f"Notify SOC", key=f"soc_{u}"):
+                    st.success(f"📩 PagerDuty: Alert payload dispatched for '{u}'.")
+    else:
+        st.success("No critical users require immediate remediation.")
+
+    # -------------------------
     # ATTACK STORY
     # -------------------------
     st.markdown("### 🧠 Attack Analysis")
