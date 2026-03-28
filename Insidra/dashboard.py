@@ -9,7 +9,7 @@ from model.preprocess import preprocess_data
 from model.anomaly_model import train_model, predict
 from model.risk_engine import *
 from mailer import send_soc_email
-from remediation import suspend_account, force_mfa, get_remediation_summary_df, get_applied_actions, load_history
+from remediation import suspend_account, force_mfa, get_remediation_summary_df, get_applied_actions, load_history, unsuspend_account
 
 st.set_page_config(layout="wide", page_title="Live Threat Monitor")
 
@@ -304,6 +304,23 @@ if "final_df" in st.session_state:
                         st.error(f" {msg_response}")
     else:
         st.success("No critical users require immediate remediation.")
+
+    # -------------------------
+    # RESTORE USERS
+    # -------------------------
+    ui_history = load_history()
+    currently_suspended = sorted({r["user_id"] for r in ui_history if r["action"] == "Suspend Account"})
+    
+    if currently_suspended:
+        st.markdown("### 🔓 Restore Network Access")
+        st.write("Click below to unsuspend employees and allow their future logs back into the pipeline.")
+        cols = st.columns(max(len(currently_suspended), 1))
+        for idx, s_u in enumerate(currently_suspended):
+            if cols[idx].button(f"Unsuspend {s_u}", key=f"unsusp_btn_{s_u}"):
+                if unsuspend_account(s_u):
+                    st.success(f"Restored network access for {s_u}")
+                    time.sleep(0.5)
+                    st.rerun()
 
     # -------------------------
     # AUDIT LOG

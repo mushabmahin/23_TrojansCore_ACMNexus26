@@ -45,6 +45,21 @@ def suspend_account(user_id):
     time.sleep(0.5) # Simulate API latency
     return record_action(user_id, "Suspend Account", "Active Directory")
 
+def unsuspend_account(user_id):
+    """
+    Reverses an account suspension by removing the corresponding active directory block from history.
+    """
+    history = load_history()
+    
+    # Filter out the suspension records for this specific user
+    new_history = [r for r in history if not (r["user_id"] == user_id and r["action"] == "Suspend Account")]
+    
+    # If the length changed, it means we actually unsuspended someone
+    if len(new_history) < len(history):
+        save_history(new_history)
+        return True
+    return False
+
 def force_mfa(user_id):
     """
     Simulates making an API call to Okta to force re-authentication.
