@@ -156,7 +156,7 @@ if start or fast_forward:
         # -------------------------
         # SUSPICIOUS LOGS
         # -------------------------
-        suspicious_df = df[df["risk_score"] >= 40]
+        suspicious_df = df[df["alert"].isin(["MEDIUM", "HIGH"])]
 
         if fast_forward and i < max_iters - 1:
             continue
@@ -218,7 +218,7 @@ if start or fast_forward:
             st.markdown("### Suspicious Activity Logs")
 
             if not suspicious_df.empty:
-                display_df = suspicious_df.tail(10)[
+                display_df = suspicious_df[
                     ["timestamp", "emp_id", "risk_score", "alert", "reasons"]
                 ]
 
@@ -226,7 +226,7 @@ if start or fast_forward:
                     lambda x: ", ".join(x) if isinstance(x, list) else x
                 )
 
-                st.dataframe(display_df, use_container_width=True)
+                st.dataframe(display_df, use_container_width=True, height=350)
             else:
                 st.success("No suspicious activity detected")
 
